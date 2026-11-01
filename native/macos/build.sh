@@ -81,7 +81,8 @@ codesign --force --deep --sign - --timestamp=none "$STAGE" >/dev/null 2>&1
 plutil -lint "$STAGE/Contents/Info.plist" >/dev/null
 codesign --verify --deep --strict "$STAGE" >/dev/null 2>&1
 
-# 最后一步才换：旧目录先挪走，失败时由 trap 还原。
+# 最后一步才换：目标父目录先建好，旧目录再挪走，失败时由 trap 还原。
+mkdir -p "$(dirname "$APP")"
 if [[ -d "$APP" ]]; then mv "$APP" "$OLD"; fi
 mv "$STAGE" "$APP"
 rm -rf "$OLD"
