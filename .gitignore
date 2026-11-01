@@ -1,0 +1,17 @@
+# 依赖
+node_modules/
+
+# 系统与编辑器
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# 日志
+*.log
+
+# 运行时产物
+.build/
+
+# 构建产物：macOS Helper 可执行包（可在本地 native/macos/build.sh 重建）
+runtime/bin/
