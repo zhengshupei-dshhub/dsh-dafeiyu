@@ -10,6 +10,7 @@ import {
   diaryBubble,
   growthBubbles,
   idleBubble,
+  mergeBubbles,
 } from '../src/persona-bridge.js'
 
 function tmpDir() {
@@ -149,4 +150,24 @@ test('关闭开关后不冒泡', () => {
   bridge.pumpNow()
   assert.equal(sent.length, 0)
   bridge.stop()
+})
+
+test('积压气泡合并成一条', () => {
+  assert.equal(mergeBubbles([]), undefined)
+  assert.equal(mergeBubbles([{ message: '' }]), undefined)
+
+  const single = mergeBubbles([{ message: '成长了', detail: '强度 62' }])
+  assert.equal(single.message, '成长了')
+  assert.equal(single.detail, '强度 62')
+
+  const pair = mergeBubbles([{ message: '甲', detail: 'd' }, { message: '乙' }])
+  assert.equal(pair.message, '甲；乙')
+  assert.equal(pair.detail, 'd')
+
+  const many = mergeBubbles([{ message: '甲' }, { message: '乙' }, { message: '丙' }])
+  assert.match(many.message, /^甲；另外还有 2 件事$/)
+
+  const long = mergeBubbles([{ message: '长'.repeat(200) }, { message: '乙' }])
+  assert.ok(long.message.length <= 120)
+  assert.match(long.message, /…$/)
 })

@@ -17,6 +17,7 @@ const POLL_MS = 15_000
 const MIN_BUBBLE_GAP_MS = 60_000
 const BUSY_HOLD_MS = 45_000
 const MAX_QUEUE = 8
+const MAX_MERGE_CHARS = 120
 
 const TRAIT_FLAVOR = [
   { min: 80, text: '这已经改不掉了' },
@@ -82,6 +83,28 @@ export function diaryBubble(persona, entry) {
 export function dayBubble(persona, days) {
   const name = persona?.identity?.name ?? '大肥鱼'
   return { message: `我是${name}，认识你第 ${days} 天啦`, detail: '人设 · 今天也一起干活' }
+}
+
+/**
+ * 把积压的多条气泡合成一条，避免忙完之后一条条补发旧消息。
+ * - 单条：原样返回
+ * - 两条：用「；」拼接
+ * - 三条以上：只保留第一条，后面概括成「另外还有 N 件事」
+ * 结果按 MAX_MERGE_CHARS 截断。
+ */
+export function mergeBubbles(bubbles) {
+  const list = (bubbles ?? []).filter((bubble) => bubble?.message)
+  if (!list.length) return undefined
+  const first = list[0]
+  if (list.length === 1) return first
+  const message =
+    list.length === 2
+      ? `${first.message}；${list[1].message}`
+      : `${first.message}；另外还有 ${list.length - 1} 件事`
+  return {
+    message: message.length > MAX_MERGE_CHARS ? `${message.slice(0, MAX_MERGE_CHARS - 1)}…` : message,
+    detail: first.detail,
+  }
 }
 
 export function idleBubble(persona) {
@@ -237,7 +260,8 @@ export function createPersonaBridge(options = {}) {
     const at = now()
     if (isBusy()) return
     if (at - state.lastBubbleAt < MIN_BUBBLE_GAP_MS) return
-    const bubble = queue.shift()
+    const bubble = queue.length > 1 ? mergeBubbles(queue.splice(0)) : queue.shift()
+    if (!bubble) return
     try {
       send(createMessage(CompanionMessageKind.TASK, {
         task: 'persona',
