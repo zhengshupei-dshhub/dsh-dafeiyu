@@ -2,6 +2,15 @@
 
 > This is release history. For installation, use the [latest stable release](https://github.com/QCYTSN/dsh-dafeiyu/releases/latest), not commands from older entries.
 
+## 0.1.30-local.1 · 2026-11-03
+
+### Fixed
+
+- 点击系统通知没反应：helper 之前没有设置 `UNUserNotificationCenter` delegate。
+  新增 `NotificationLink`，点击「任务完成 / 等待审批 / 任务出错」通知会打开
+  `dsh://open` 把 DSH 唤到前台（未注册该方案时退化为打开配置的 WebUI 地址）；
+  应用在前台时也会正常显示横幅。
+
 ## 0.1.23 · 2026-10-29
 
 ### Fixed

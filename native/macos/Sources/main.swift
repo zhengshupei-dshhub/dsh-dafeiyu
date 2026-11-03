@@ -142,6 +142,8 @@ let controller = PetController(
     eventLogURL: eventLogURL,
     snapshotURL: snapshotURL
 )
+NotificationLink.shared.fallbackURL = URL(string: webuiURL)
+NotificationLink.shared.install()
 controller.show()
 
 ProtocolIO.shared.write([

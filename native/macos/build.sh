@@ -42,6 +42,7 @@ SOURCES=(
   "$DIR/Sources/LayoutStore.swift" \
   "$DIR/Sources/PetGeometry.swift" \
   "$DIR/Sources/Permissions.swift" \
+  "$DIR/Sources/NotificationLink.swift" \
   "$DIR/Sources/PetController.swift" \
   "$DIR/Sources/PetView.swift" \
   "$DIR/Sources/main.swift" \
