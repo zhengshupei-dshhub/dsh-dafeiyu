@@ -823,7 +823,17 @@ final class PetController: NSObject {
         maybeSaveSnapshot()
     }
 
+    /// 最近一次任务上下文，用来让系统通知能指明是哪个项目 / 哪个会话。
+    private var noticeProject: String?
+    private var noticeSessionId: String?
+
+    private func rememberNoticeContext(_ message: [String: Any]) {
+        if let project = Self.stringValue(message["project"]) { noticeProject = project }
+        if let sessionId = Self.stringValue(message["sessionId"]) { noticeSessionId = sessionId }
+    }
+
     private func handleState(_ message: [String: Any]) {
+        rememberNoticeContext(message)
         let state = Self.stringValue(message["state"]) ?? "IDLE"
         let activity = Self.stringValue(message["activity"])
         displayState = state
@@ -879,6 +889,7 @@ final class PetController: NSObject {
     }
 
     private func handleTask(_ message: [String: Any]) {
+        rememberNoticeContext(message)
         task = Self.stringValue(message["task"]) ?? ""
         var shownText = Self.stringValue(message["message"]) ?? task
         if task == "chat" || task == "persona" {
@@ -1032,16 +1043,21 @@ final class PetController: NSObject {
         Permissions.requestNotificationAuthorizationIfNeeded()
         guard Bundle.main.bundleIdentifier != nil else { return }
         let content = UNMutableNotificationContent()
+        let project = noticeProject.map { "「\($0)」" } ?? ""
         switch state {
         case "SUCCESS":
             content.title = "任务完成"
-            content.body = "DSH 任务已完成"
+            content.body = "\(project)DSH 任务已完成"
         case "APPROVAL":
             content.title = "等待审批"
-            content.body = "DSH 申请权限，需要你手动批准"
+            content.body = "\(project)DSH 申请权限，需要你手动批准"
         default:
             content.title = "任务出错"
-            content.body = "DSH 任务遇到问题"
+            content.body = "\(project)DSH 任务遇到问题"
+        }
+        if let sessionId = noticeSessionId {
+            // 预留给后续深链支持：点击时可据此定位到具体会话。
+            content.userInfo = ["sessionId": sessionId]
         }
         content.sound = playSound ? .default : nil
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)

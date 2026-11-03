@@ -2,6 +2,13 @@
 
 > This is release history. For installation, use the [latest stable release](https://github.com/QCYTSN/dsh-dafeiyu/releases/latest), not commands from older entries.
 
+## 0.1.31-local.1 · 2026-11-03
+
+### Changed
+
+- 系统通知正文带上项目名（如「养鱼计划」DSH 任务已完成），并在 `userInfo.sessionId`
+  里保存会话 ID，为后续深链做准备。
+
 ## 0.1.30-local.1 · 2026-11-03
 
 ### Fixed
