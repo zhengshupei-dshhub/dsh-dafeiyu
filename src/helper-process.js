@@ -720,6 +720,24 @@ export class HelperProcess {
     this.logger.debug?.(`dsh-dafeiyu helper: ${line}`)
   }
 
+  /**
+   * 心跳超时时先抓一份主线程栈：光看「超时后被重启」永远定位不到卡在哪。
+   * macOS 用系统自带 sample（1 秒采样）；抓不到就返回 undefined，不阻断恢复。
+   */
+  #captureHeartbeatSample(child) {
+    if (process.platform !== 'darwin' || !child?.pid) return undefined
+    try {
+      const file = join(homedir(), '.dsh', `dafeiyu-heartbeat-${Date.now()}.sample.txt`)
+      execFileSync('sample', [String(child.pid), '1', '-file', file], {
+        timeout: 4000,
+        stdio: 'ignore',
+      })
+      return file
+    } catch {
+      return undefined
+    }
+  }
+
   #startHeartbeat() {
     const heartbeatMs = this.options.heartbeatMs ?? 5000
     if (heartbeatMs <= 0) return
@@ -729,7 +747,11 @@ export class HelperProcess {
       if (!child || !this.spawned) return
       if (Date.now() - this.lastPongAt > timeoutMs) {
         this.logger.warn?.('dsh-dafeiyu helper heartbeat timed out')
-        this.#log('ERROR', `heartbeat timed out after ${String(Date.now() - this.lastPongAt)}ms; killing helper`)
+        const sample = this.#captureHeartbeatSample(child)
+        this.#log(
+          'ERROR',
+          `heartbeat timed out after ${String(Date.now() - this.lastPongAt)}ms; killing helper; sample=${sample ?? 'unavailable'}`,
+        )
         child.kill()
         return
       }

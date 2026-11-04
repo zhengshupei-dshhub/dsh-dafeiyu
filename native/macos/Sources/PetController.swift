@@ -1137,6 +1137,40 @@ final class PetController: NSObject {
         }
     }
 
+    /** 季节光晕位图缓存：键是「季节 + 强度 + 半径」，尺寸变化才重画。 */
+    private var glowCache: (key: String, image: CGImage)?
+
+    private func cachedGlow(for season: String, palette: LookPalette, radius: CGFloat, intensity: CGFloat) -> CGImage? {
+        let key = "\(season)|\(Int((intensity * 100).rounded()))|\(Int(radius.rounded()))"
+        if let cached = glowCache, cached.key == key { return cached.image }
+        let side = Int((radius * 2).rounded(.up)) + 2
+        guard side > 8,
+              let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let bitmap = CGContext(data: nil,
+                                     width: side,
+                                     height: side,
+                                     bitsPerComponent: 8,
+                                     bytesPerRow: 0,
+                                     space: space,
+                                     bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        let colors = [
+            palette.glow.withAlphaComponent(0.26 * intensity).cgColor,
+            palette.glow.withAlphaComponent(0).cgColor,
+        ] as CFArray
+        guard let gradient = CGGradient(colorsSpace: space, colors: colors, locations: [0, 1]) else {
+            return nil
+        }
+        let mid = CGPoint(x: CGFloat(side) / 2, y: CGFloat(side) / 2)
+        bitmap.drawRadialGradient(gradient,
+                                  startCenter: mid, startRadius: 0,
+                                  endCenter: mid, endRadius: radius,
+                                  options: [])
+        guard let image = bitmap.makeImage() else { return nil }
+        glowCache = (key, image)
+        return image
+    }
+
     /// 画在角色之前（也就是角色背后）：一圈季节色柔光 + 慢慢飘落的粒子。
     /// 纯渲染层实现，帧素材一张没动，关掉即恢复原样。
     private func drawLook(in view: NSView) {
@@ -1149,19 +1183,14 @@ final class PetController: NSObject {
         let center = CGPoint(x: pet.midX, y: pet.midY)
         let radius = max(pet.width, pet.height) * 0.52
 
-        let glowColors = [
-            palette.glow.withAlphaComponent(0.26 * intensity).cgColor,
-            palette.glow.withAlphaComponent(0).cgColor,
-        ] as CFArray
-        if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                     colors: glowColors,
-                                     locations: [0, 1]) {
-            ctx.saveGState()
-            ctx.drawRadialGradient(gradient,
-                                   startCenter: center, startRadius: 0,
-                                   endCenter: center, endRadius: radius,
-                                   options: [.drawsAfterEndLocation])
-            ctx.restoreGState()
+        // 2026-11-04：径向渐变原来是每帧重画的，60fps 下主线程被 CoreGraphics
+        // 的 RGBAf16 着色占满（sample 抓到 100% 在 shade_radial），心跳因此超时。
+        // 现在按「季节 + 强度 + 半径」缓存一张位图，每帧只贴图。
+        if let glow = cachedGlow(for: season, palette: palette, radius: radius, intensity: intensity) {
+            ctx.draw(glow, in: CGRect(x: center.x - radius,
+                                      y: center.y - radius,
+                                      width: radius * 2,
+                                      height: radius * 2))
         }
 
         // 粒子区域比角色略大一点，让它们从角色头顶上方飘下来。

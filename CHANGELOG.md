@@ -2,6 +2,19 @@
 
 > This is release history. For installation, use the [latest stable release](https://github.com/QCYTSN/dsh-dafeiyu/releases/latest), not commands from older entries.
 
+## 0.1.32-local.1 · 2026-11-04
+
+### Performance
+
+- 季节光晕改成缓存位图：原先每帧新建 `CGGradient` 并 `drawRadialGradient`，
+  `sample` 显示主线程 100% 耗在 CoreGraphics 的 `RGBAf16` 径向着色上。
+  现在按「季节 + 强度 + 半径」缓存一张 CGImage，每帧只贴图。
+
+### Diagnostics
+
+- 心跳超时先 `sample` 主线程栈再杀 helper（macOS 用系统 `sample`，抓不到不影响恢复），
+  日志里会记录 `sample=<路径>`，下次超时能直接看到卡在哪。
+
 ## 0.1.31-local.1 · 2026-11-03
 
 ### Changed
