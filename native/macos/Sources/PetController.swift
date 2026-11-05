@@ -1374,9 +1374,10 @@ final class PetController: NSObject {
                 return
             }
             ctx.saveGState()
-            // 像素画：关掉插值，避免缩放/位移时边缘像素逐帧呼吸式抖动（「一闪一闪」）。
-            ctx.interpolationQuality = .none
-            NSGraphicsContext.current?.imageInterpolation = .none
+            // 高质量重采样：整张精灵帧是缩放到 0.55 显示的，用最近邻会把抗锯齿丢成台阶状硬边。
+            // 抖动问题已经通过「去掉逐帧缩放/旋转 + 位移取整」解决，这里可以安全地用平滑插值。
+            ctx.interpolationQuality = .high
+            NSGraphicsContext.current?.imageInterpolation = .high
 
             var scaleX: CGFloat = 1
             var scaleY: CGFloat = 1
@@ -1391,7 +1392,8 @@ final class PetController: NSObject {
                 // 望向鼠标：用水平位移代替旋转，纯 blit 不重采样，边缘保持锐利
                 let petCenterX = petX + petWidth / 2
                 let dx = NSEvent.mouseLocation.x - petCenterX
-                shiftX = max(-4, min(4, dx / 260))
+                // 取整到像素，避免亚像素重采样带来逐帧轻微抖动
+                shiftX = (max(-4.0, min(4.0, dx / 260))).rounded()
 
             }
 

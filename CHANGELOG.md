@@ -2,6 +2,14 @@
 
 > This is release history. For installation, use the [latest stable release](https://github.com/QCYTSN/dsh-dafeiyu/releases/latest), not commands from older entries.
 
+## 0.1.40-local.1 · 2026-11-05
+
+### Fixed（用户录屏逐帧定位）
+
+- **边缘生硬的真正原因**：之前为了防抖动把渲染插值设成「最近邻」，而精灵是缩放到 0.55 显示的——最近邻缩小会把抗锯齿丢成台阶状硬边（放大对比：NEAREST 边缘呈方块台阶，LANCZOS 平滑）。现改回高质量插值。
+- 抖动问题早已通过「去掉逐帧缩放/旋转」解决，因此平滑插值不会重新引入闪烁。
+- 「望向鼠标」的水平位移改为取整到像素，避免亚像素重采样造成轻微抖动。
+
 ## 0.1.39-local.1 · 2026-11-05
 
 ### Changed
