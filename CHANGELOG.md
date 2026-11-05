@@ -2,6 +2,13 @@
 
 > This is release history. For installation, use the [latest stable release](https://github.com/QCYTSN/dsh-dafeiyu/releases/latest), not commands from older entries.
 
+## 0.1.42-local.1 · 2026-11-05
+
+### Fixed
+
+- **走动功能从未启动**：`startTimers()` 里只调了 `startAliveTimer()`，`startWanderTimer()` 调用在某次改动中丢了，所以「空闲走来走去」一直没生效（加临时调试日志确认 wanderTick 从未被调用）。已补回调用。
+- 顺带确认：走动只在该会话真正 IDLE 时进行，WORKING 期间不动（调试日志里 `base=WORKING active=false` 符合预期）。
+
 ## 0.1.41-local.1 · 2026-11-05
 
 ### Fixed（按用户录屏逐帧目检确认）

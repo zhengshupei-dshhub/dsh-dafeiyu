@@ -437,6 +437,7 @@ final class PetController: NSObject {
         updateClickThrough()
         scheduleMicro()
         startAliveTimer()
+        startWanderTimer()
     }
 
     /// AppKit routes a click to this panel before it ever reaches the view
