@@ -2,6 +2,15 @@
 
 > This is release history. For installation, use the [latest stable release](https://github.com/QCYTSN/dsh-dafeiyu/releases/latest), not commands from older entries.
 
+## 0.1.39-local.1 · 2026-11-05
+
+### Changed
+
+- **恢复全部闲置动作**：`idleMicroClips` 回到 [伸懒腰, 打哈欠, 吃 token, 坐下, 张望]，不再靠删除规避问题。
+- **微动作过渡改用溶解**：淡入淡出 0.10 → **0.45s**，用交叉淡化处理姿势差异，而不是让它硬跳。
+- **抠图 v6**：alpha 改为「是否黑背景」判定（不再用亮度），深色部位（头发/裙子）不再被算成半透明并被填充糊掉；加 0.7px 羽化。实测羽化带 2470 px（原版 1540）、外部光晕 495 px（原版 386），边缘观感接近原画。
+- 工作状态片段仍然统一为 `working`（避免每换一个工具就换姿势），状态切换淡入 0.20s。
+
 ## 0.1.38-local.1 · 2026-11-05
 
 ### Fixed（用录屏逐帧定位）

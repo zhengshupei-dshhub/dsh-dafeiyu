@@ -32,26 +32,34 @@ CROP = "412:344:100:0"
 FPS = 24
 QUALITY = 85
 
-ALPHA_LOW = 5.0    # 亮度低于此值 → 全透明
-ALPHA_HIGH = 46.0  # 亮度高于此值 → 全不透明
-EDGE_BLUR = 6      # 边缘颜色去污染的邻域半径
-ALPHA_ERODE = 0.30 # 腐蚀外圈半透明环的幅度
+BLACK_THRESH = 4.0   # 最大通道低于此值视为背景（纯黑）
+FEATHER = 0.7        # 边缘羽化半径（px）
+HALO_BLUR = 2.2      # 外围光晕模糊半径
+HALO_WEIGHT = 0.00   # 外围光晕强度（0=不加，接近原版）
+EDGE_BLUR = 6        # 边缘色去污染的邻域半径
 
 
 def matte(png: Path) -> Image.Image:
+    """黑底 webm → 透明 RGBA。
+
+    v6（2026-11-05）：以「是否黑」而不是亮度做 alpha，避免深色部位（头发/裙子）被算成半透明；
+    再做 0.7px 羽化 + 外围柔和光晕还原原画的边缘观感；边缘色用邻近实心像素填充。
+    """
     arr = np.asarray(Image.open(png).convert("RGB")).astype(np.float32)
-    lum = arr.mean(axis=2)
+    lum = arr.max(axis=2)
 
-    alpha = np.clip((lum - ALPHA_LOW) / (ALPHA_HIGH - ALPHA_LOW), 0, 1)
-    alpha[lum <= ALPHA_LOW] = 0
+    alpha = (lum > BLACK_THRESH).astype(np.float32)
+    alpha = np.asarray(
+        Image.fromarray((alpha * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(FEATHER))
+    ).astype(np.float32) / 255.0
+    if HALO_WEIGHT > 0:
+        halo = np.asarray(
+            Image.fromarray((alpha * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(HALO_BLUR))
+        ).astype(np.float32) / 255.0
+        alpha = np.clip(alpha + halo * HALO_WEIGHT, 0, 1)
 
-    # 腐蚀外圈半透明环，去掉黑底抗锯齿留下的亮/暗边
-    alpha = np.clip((alpha - ALPHA_ERODE) / (1.0 - ALPHA_ERODE), 0, 1)
-
-    # 边缘颜色 = 邻近实心像素的平均色（只作用于边缘带，不碰内部）
-    rgb = arr.copy()
-    foreground = alpha >= 0.90
-    weighted = np.clip(rgb, 0, 255) * foreground[..., None]
+    foreground = alpha >= 0.99
+    weighted = np.clip(arr, 0, 255) * foreground[..., None]
     color_blur = np.asarray(
         Image.fromarray(weighted.astype(np.uint8)).filter(ImageFilter.BoxBlur(EDGE_BLUR))
     ).astype(np.float32)
@@ -62,10 +70,11 @@ def matte(png: Path) -> Image.Image:
         / 255.0
     )
     fill = color_blur / np.clip(weight_blur, 1e-3, 1)[..., None]
-    edge = (alpha > 0.001) & (alpha < 0.95)
-    rgb[edge] = np.clip(fill[edge], 0, 255)
+    rgb = arr.copy()
+    band = (alpha > 0.02) & (alpha < 0.99)
+    rgb[band] = np.clip(fill[band], 0, 255)
 
-    return Image.fromarray(np.dstack([rgb.astype(np.uint8), (alpha * 255).astype(np.uint8)]), "RGBA")
+    return Image.fromarray(np.dstack([np.clip(rgb, 0, 255).astype(np.uint8), (alpha * 255).astype(np.uint8)]), "RGBA")
 
 
 def convert(webm: Path, key: str) -> int:

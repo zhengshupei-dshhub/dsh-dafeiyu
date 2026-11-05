@@ -4675,7 +4675,13 @@
     "testing": "working",
     "using-tool": "working"
   },
-  "idleMicroClips": [],
+  "idleMicroClips": [
+    "idle_stretch",
+    "idle_yawn",
+    "eat_token",
+    "sit",
+    "look"
+  ],
   "idleMicroIntervalsMs": {
     "quiet": [
       45000,
