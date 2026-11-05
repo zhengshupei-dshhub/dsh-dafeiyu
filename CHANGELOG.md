@@ -2,6 +2,13 @@
 
 > This is release history. For installation, use the [latest stable release](https://github.com/QCYTSN/dsh-dafeiyu/releases/latest), not commands from older entries.
 
+## 0.1.41-local.1 · 2026-11-05
+
+### Fixed（按用户录屏逐帧目检确认）
+
+- **重影**：之前对姿势差异大的片段做交叉溶解（0.10–0.45s），实际效果是两张图各 50% 叠加——头发和呆毛出现双影、整只发灰。逐帧放大确认后**改为直接切换**（`crossfadeDuration` 返回 nil）。精灵动画本来就是逐帧换姿势，硬切是正常的。
+- 保留高质量渲染插值（0.1.40 的修复），边缘保持平滑。
+
 ## 0.1.40-local.1 · 2026-11-05
 
 ### Fixed（用户录屏逐帧定位）
