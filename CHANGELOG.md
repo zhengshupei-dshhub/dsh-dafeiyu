@@ -2,6 +2,18 @@
 
 > This is release history. For installation, use the [latest stable release](https://github.com/QCYTSN/dsh-dafeiyu/releases/latest), not commands from older entries.
 
+## 0.1.35-local.1 · 2026-11-05
+
+### Feature
+
+- 空闲「走来走去」：导入上游 `开心小跑` 跑动动画，纯空闲时播跑动帧 + 移动窗口，看起来是真在走（不再是贴图滑动），到屏幕边缘自动回头，随机停几秒。右键菜单「闲逛」开关，默认开。
+- 空闲底帧换成 `待机呼吸休闲`（真呼吸动画，顶掉原来的 idle 站立帧）。
+- 新增两个闲置微动作：`原地重力下蹲压缩`（坐下）、`东张西望`（望），随机触发。
+
+### Assets
+
+- 新增 scripts/import-clips.py：从上游 dsh-pet 仓库下载 webm 并转成透明 webp 帧（crop 412:344:100:0 @24fps，按亮度抠黑底）。
+
 ## 0.1.34-local.1 · 2026-11-05
 
 ### Feature
