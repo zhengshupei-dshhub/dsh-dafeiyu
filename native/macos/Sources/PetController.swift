@@ -79,7 +79,6 @@ final class PetController: NSObject {
     var scale: Double
     var bubbleScale: Double
     var reducedMotion: Bool
-    var wander: Bool
     var activityLevel: String
     var soundEnabled: Bool
     var soundStates: Set<String>
@@ -113,9 +112,13 @@ final class PetController: NSObject {
     private var keepFrontTimer: Timer?
     private var microTimer: Timer?
     private var clickThroughTimer: Timer?
-    private var wanderTimer: Timer?
-    private var wanderPausedUntil: TimeInterval = 0
-    private var wanderDirection: CGFloat = 1
+    private var aliveTimer: Timer?
+    private var aliveBlinkUntil: CFTimeInterval = 0
+    private var aliveBlinkStart: CFTimeInterval = 0
+    private var aliveBlinkDuration: CFTimeInterval = 0.12
+    private var aliveSitUntil: CFTimeInterval = 0
+    private var aliveSitStart: CFTimeInterval = 0
+    private var aliveSitDuration: CFTimeInterval = 2.4
     /// A native menu runs its own tracking loop; keep the panel interactive
     /// until it closes so the timer cannot steal the selection click.
     private var menuOpen = false
@@ -159,11 +162,6 @@ final class PetController: NSObject {
             self.reducedMotion = raw == "1"
         } else {
             self.reducedMotion = layout.reducedMotion
-        }
-        if let raw = env["DSH_DAFEIYU_WANDER"] {
-            self.wander = raw == "1"
-        } else {
-            self.wander = layout.wander
         }
         self.activityLevel = env["DSH_DAFEIYU_ACTIVITY_LEVEL"] ?? "normal"
         self.soundEnabled = env["DSH_DAFEIYU_SOUND_ENABLED"] != "0"
@@ -325,7 +323,6 @@ final class PetController: NSObject {
         layout.scale = scale
         layout.bubbleScale = bubbleScale
         layout.reducedMotion = reducedMotion
-        layout.wander = wander
         layout.bubbleMode = bubbleMode
         layout.bubbleStates = bubbleStates
         layout.save(to: layoutURL)
@@ -388,6 +385,33 @@ final class PetController: NSObject {
         return min(0.02, max(0.008, Double(model.activeClip.frameMs) / 3000))
     }
 
+    /// 常驻「活着」的微动：呼吸是每帧计算的，眨眼和坐下由这个低频定时器排期。
+    private func startAliveTimer() {
+        aliveTimer?.invalidate()
+        aliveTimer = nil
+        guard !reducedMotion else { return }
+        aliveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            self?.scheduleAliveEvents()
+        }
+    }
+
+    private func scheduleAliveEvents() {
+        let now = CACurrentMediaTime()
+        // 眨眼：随机 2–7 秒一次，每次约 120ms 的垂直压一下
+        if now >= aliveBlinkUntil, Double.random(in: 0..<1) < 0.03 {
+            aliveBlinkStart = now
+            aliveBlinkDuration = 0.12
+            aliveBlinkUntil = now + aliveBlinkDuration
+        }
+        // 坐下：只在纯空闲时，随机 25–60 秒一次，每次约 2.4s 下沉一点
+        let idle = model.baseState == "IDLE" && model.overlayClipName == nil && model.pulseState == nil
+        if idle, now >= aliveSitUntil, Double.random(in: 0..<1) < 0.008 {
+            aliveSitStart = now
+            aliveSitDuration = 2.4
+            aliveSitUntil = now + aliveSitDuration
+        }
+    }
+
     private func startAnimTimer() {
         animTimer?.invalidate()
         animTimer = Timer.scheduledTimer(withTimeInterval: animationInterval, repeats: true) { [weak self] _ in
@@ -407,7 +431,7 @@ final class PetController: NSObject {
         }
         updateClickThrough()
         scheduleMicro()
-        startWanderTimer()
+        startAliveTimer()
     }
 
     /// AppKit routes a click to this panel before it ever reaches the view
@@ -710,11 +734,6 @@ final class PetController: NSObject {
         bubbleItem.submenu = bubbleMenu
         menu.addItem(bubbleItem)
 
-        let wander = NSMenuItem(title: "闲逛", action: #selector(toggleWander(_:)), keyEquivalent: "")
-        wander.target = self
-        wander.state = self.wander ? .on : .off
-        menu.addItem(wander)
-
         let reduced = NSMenuItem(title: "减少动态", action: #selector(toggleReducedMotion(_:)), keyEquivalent: "")
         reduced.target = self
         reduced.state = reducedMotion ? .on : .off
@@ -765,12 +784,12 @@ final class PetController: NSObject {
         restartAnimTimer()
         if enabled {
             microTimer?.invalidate()
-            wanderTimer?.invalidate()
+            aliveTimer?.invalidate()
             if !dragging { model.clearOverlay() }
             fadeFromFrame = nil
         } else {
             scheduleMicro()
-            startWanderTimer()
+            startAliveTimer()
         }
     }
 
@@ -779,60 +798,6 @@ final class PetController: NSObject {
         saveLayout()
         reportSettings(["reducedMotion": reducedMotion])
         contentView?.needsDisplay = true
-    }
-
-    @objc private func toggleWander(_ sender: NSMenuItem) {
-        wander = sender.state == .off
-        startWanderTimer()
-        saveLayout()
-        reportSettings(["wander": wander])
-    }
-
-    /// 空闲时在桌面底部左右「游来游去」。只在纯空闲时走，拖拽/菜单/互动/微动画
-    /// 期间都停下，避免和用户操作抢位置。
-    private func startWanderTimer() {
-        wanderTimer?.invalidate()
-        wanderTimer = nil
-        guard wander else { return }
-        wanderTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
-            self?.wanderTick()
-        }
-    }
-
-    private func canWander() -> Bool {
-        guard wander, !reducedMotion, !dragging, !menuOpen, !quitting else { return false }
-        guard model.baseState == "IDLE" else { return false }
-        guard model.overlayClipName == nil, model.pulseState == nil else { return false }
-        return true
-    }
-
-    @objc private func wanderTick() {
-        guard canWander() else { return }
-        let now = Date().timeIntervalSince1970
-        if now < wanderPausedUntil { return }
-
-        guard let panel = panel else { return }
-        let geometry = panel.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-
-        // 随机停一下，别一直走个不停
-        if Double.random(in: 0..<1) < 0.006 {
-            wanderPausedUntil = now + Double.random(in: 2.0...8.0)
-        }
-
-        let speed: CGFloat = 16.0 / 30.0
-        var nextX = petX + speed * wanderDirection
-        let margin: CGFloat = 12
-        let left = geometry.minX + margin
-        let right = geometry.maxX - petWidth - margin
-        if nextX <= left {
-            nextX = left
-            wanderDirection = 1
-        } else if nextX >= right {
-            nextX = right
-            wanderDirection = -1
-        }
-        if abs(nextX - petX) < 0.25 { return }
-        moveToPet(nextX, petY)
     }
 
     @objc private func openWebUI(_ sender: Any?) {
@@ -1326,30 +1291,63 @@ final class PetController: NSObject {
                 return
             }
             ctx.saveGState()
-            var gestureScale: CGFloat = 1
-            var gestureRotation: CGFloat = 0
-            var gestureLift: CGFloat = 0
+            var scaleX: CGFloat = 1
+            var scaleY: CGFloat = 1
+            var rotation: CGFloat = 0
+            var lift: CGFloat = 0
+
+            // 常驻「活着」的微动：呼吸 + 望向鼠标 + 眨眼 + 偶尔坐下
+            if !reducedMotion {
+                let now = CACurrentMediaTime()
+                let breathe = 0.015 * sin(2 * .pi * now / 3.0)
+                scaleX += breathe
+                scaleY += breathe
+
+                // 望向鼠标：朝光标方向轻微侧身（限制在小角度，避免转晕）
+                let petCenterX = petX + petWidth / 2
+                rotation = max(-0.06, min(0.06, (NSEvent.mouseLocation.x - petCenterX) / 900))
+
+                // 眨眼：整只竖直压一下，读作「眨一下」
+                if now < aliveBlinkUntil {
+                    let progress = min(1, max(0, (now - aliveBlinkStart) / aliveBlinkDuration))
+                    scaleY *= 1 - 0.32 * sin(.pi * progress)
+                }
+                // 偶尔坐下：下沉一点 + 微微缩小
+                if now < aliveSitUntil {
+                    let progress = min(1, max(0, (now - aliveSitStart) / aliveSitDuration))
+                    let sitScale = 1 - 0.06 * sin(.pi * progress)
+                    scaleX *= sitScale
+                    scaleY *= sitScale
+                    lift += 7 * sin(.pi * progress)
+                }
+            }
+
+            // 互动手势叠加在上面（覆盖旋转，乘进缩放）
             if let kind = gestureKind {
                 let elapsed = CACurrentMediaTime() - gestureStart
                 let t = min(1, max(0, elapsed / max(0.01, gestureDuration)))
                 switch kind {
                 case "bounce":
-                    gestureScale = 1 + 0.07 * sin(.pi * t)
-                    gestureLift = -8 * sin(.pi * t)
+                    scaleX *= 1 + 0.07 * sin(.pi * t)
+                    scaleY *= 1 + 0.07 * sin(.pi * t)
+                    lift -= 8 * sin(.pi * t)
                 case "tilt":
-                    gestureRotation = 0.10 * sin(.pi * t)
+                    rotation = 0.10 * sin(.pi * t)
                 case "droop":
-                    gestureScale = 1 - 0.04 * sin(.pi * t)
-                    gestureLift = 4 * sin(.pi * t)
+                    scaleX *= 1 - 0.04 * sin(.pi * t)
+                    scaleY *= 1 - 0.04 * sin(.pi * t)
+                    lift += 4 * sin(.pi * t)
                 case "talk":
-                    gestureScale = 1 + 0.02 * sin(6 * .pi * t)
+                    scaleX *= 1 + 0.02 * sin(6 * .pi * t)
+                    scaleY *= 1 + 0.02 * sin(6 * .pi * t)
                 default:
                     break
                 }
             }
-            ctx.translateBy(x: centerX, y: centerY + gestureLift)
-            if gestureRotation != 0 { ctx.rotate(by: gestureRotation) }
-            if gestureScale != 1 { ctx.scaleBy(x: gestureScale, y: gestureScale) }
+
+            ctx.translateBy(x: centerX, y: centerY + lift)
+            if rotation != 0 { ctx.rotate(by: rotation) }
+            if scaleX != 1 || scaleY != 1 { ctx.scaleBy(x: scaleX, y: scaleY) }
             // The content view is flipped (top-left origin). NSImage drawing
             // does not compensate for a flipped context, which would render
             // the pet vertically mirrored. Mirror about the image's own

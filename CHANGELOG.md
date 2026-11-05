@@ -2,9 +2,17 @@
 
 > This is release history. For installation, use the [latest stable release](https://github.com/QCYTSN/dsh-dafeiyu/releases/latest), not commands from older entries.
 
-## 0.1.33-local.1 · 2026-11-05
+## 0.1.34-local.1 · 2026-11-05
 
 ### Feature
+
+- 空闲「活着」微动：呼吸（轻微放大缩小）、眨眼（随机竖直压一下）、望向鼠标（朝光标轻微侧身）、偶尔坐下（下沉一点）。全部是渲染层变换，不改精灵图，`减少动态` 时关闭。
+
+### Removed
+
+- 回退 0.1.33 的桌面漂移（用户反馈效果不好）。
+
+## 0.1.33-local.1 · 2026-11-05（已回退）
 
 - 空闲闲逛：大肥鱼在纯空闲时会在桌面底部左右缓缓「游来游去」，到屏幕边缘自动回头，
   途中随机停几秒再继续。拖拽、菜单、互动动画、微动画、减少动态期间自动停下，不与用户操作抢位置。

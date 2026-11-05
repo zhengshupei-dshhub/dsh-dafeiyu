@@ -12,7 +12,6 @@ struct PetLayout {
     var scale: Double = 1.0
     var bubbleScale: Double = 1.0
     var reducedMotion: Bool = false
-    var wander: Bool = true
     var bubbleMode: String = "always"
     var bubbleStates: [String] = ["SUCCESS", "ERROR", "WAITING"]
     /// Set once the native helper has written the file. Lets us migrate the
@@ -74,7 +73,6 @@ struct PetLayout {
             else if let i = raw as? Int { layout.bubbleScale = min(1.2, max(0.5, Double(i))) }
         }
         if let b = json["reducedMotion"] as? Bool { layout.reducedMotion = b }
-        if let b = json["wander"] as? Bool { layout.wander = b }
         if let mode = json["bubbleMode"] as? String, ["always", "hidden", "custom"].contains(mode) {
             layout.bubbleMode = mode
         }
@@ -98,7 +96,6 @@ struct PetLayout {
             "scale": normalized.scale,
             "bubbleScale": normalized.bubbleScale,
             "reducedMotion": reducedMotion,
-            "wander": wander,
             "bubbleMode": normalized.bubbleMode,
             "bubbleStates": normalized.bubbleStates,
             "coordinateSpace": "appkit-bottom-left",
