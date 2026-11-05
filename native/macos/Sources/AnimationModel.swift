@@ -24,6 +24,8 @@ final class AnimationModel {
         if previousClip == currentClip || dragClips.contains(previousClip) || dragClips.contains(currentClip) {
             return nil
         }
+        // 眨眼是一闪而过的小动作，淡入淡出压短，否则闭眼帧根本来不及显示
+        if previousClip == "blink" || currentClip == "blink" { return 0.04 }
         return 0.10
     }
 

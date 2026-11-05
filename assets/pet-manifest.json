@@ -4660,7 +4660,7 @@
     }
   },
   "stateMap": {
-    "IDLE": "idle_breathe",
+    "IDLE": "idle",
     "THINKING": "thinking",
     "WORKING": "working",
     "WAITING": "waiting",

@@ -34,7 +34,8 @@ QUALITY = 85
 
 ALPHA_LOW = 5.0    # 亮度低于此值 → 全透明
 ALPHA_HIGH = 46.0  # 亮度高于此值 → 全不透明
-EDGE_BLUR = 5      # 边缘颜色去污染的邻域半径
+EDGE_BLUR = 6      # 边缘颜色去污染的邻域半径
+ALPHA_ERODE = 0.30 # 腐蚀外圈半透明环的幅度
 
 
 def matte(png: Path) -> Image.Image:
@@ -44,11 +45,12 @@ def matte(png: Path) -> Image.Image:
     alpha = np.clip((lum - ALPHA_LOW) / (ALPHA_HIGH - ALPHA_LOW), 0, 1)
     alpha[lum <= ALPHA_LOW] = 0
 
-    # 去预乘：源是「角色叠在黑底」，C = color*alpha → color = C/alpha
-    rgb = np.clip(arr / np.clip(alpha, 1e-3, 1)[..., None], 0, 255)
+    # 腐蚀外圈半透明环，去掉黑底抗锯齿留下的亮/暗边
+    alpha = np.clip((alpha - ALPHA_ERODE) / (1.0 - ALPHA_ERODE), 0, 1)
 
-    # 边缘颜色去污染：用邻近实体像素的平均色替换半透明像素的颜色
-    foreground = alpha >= 0.98
+    # 边缘颜色 = 邻近实心像素的平均色（只作用于边缘带，不碰内部）
+    rgb = arr.copy()
+    foreground = alpha >= 0.90
     weighted = np.clip(rgb, 0, 255) * foreground[..., None]
     color_blur = np.asarray(
         Image.fromarray(weighted.astype(np.uint8)).filter(ImageFilter.BoxBlur(EDGE_BLUR))
@@ -60,7 +62,7 @@ def matte(png: Path) -> Image.Image:
         / 255.0
     )
     fill = color_blur / np.clip(weight_blur, 1e-3, 1)[..., None]
-    edge = (alpha > 0.02) & (alpha < 0.98)
+    edge = (alpha > 0.001) & (alpha < 0.95)
     rgb[edge] = np.clip(fill[edge], 0, 255)
 
     return Image.fromarray(np.dstack([rgb.astype(np.uint8), (alpha * 255).astype(np.uint8)]), "RGBA")

@@ -2,6 +2,19 @@
 
 > This is release history. For installation, use the [latest stable release](https://github.com/QCYTSN/dsh-dafeiyu/releases/latest), not commands from older entries.
 
+## 0.1.37-local.1 · 2026-11-05
+
+### Fixed（按真机截屏逐项核对）
+
+- 抠图 v3：软 alpha + 腐蚀外圈半透明环 + 边缘带用邻近实心色填充。真机截屏确认轮廓不再有暗环/亮边。
+- 空闲底帧换回原版 `idle`：`待机呼吸休闲` 片段的姿势变化太大（拿杯子、抱臂），看着像跳帧；原版 idle 姿势稳定，而且**自带原画师画的眨眼**（第 35–56 帧），不需要我再合成。
+- 撤掉全部合成眨眼代码（竖直压缩的假眨眼）。
+- 渲染保持最近邻插值 + 望向鼠标用纯位移。
+
+### Lesson
+
+- helper 读的是 **app 包内** `Contents/Resources/assets`，改了 `assets/pet` 必须重新 build 才会生效。
+
 ## 0.1.36-local.1 · 2026-11-05
 
 ### Fixed（画面闪烁 / 边缘光圈）

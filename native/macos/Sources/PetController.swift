@@ -120,9 +120,6 @@ final class PetController: NSObject {
     private var wanderPausedUntil: TimeInterval = 0
     private var wanderDirection: CGFloat = 1
     private var aliveTimer: Timer?
-    private var aliveBlinkUntil: CFTimeInterval = 0
-    private var aliveBlinkStart: CFTimeInterval = 0
-    private var aliveBlinkDuration: CFTimeInterval = 0.12
     private var aliveSitUntil: CFTimeInterval = 0
     private var aliveSitStart: CFTimeInterval = 0
     private var aliveSitDuration: CFTimeInterval = 2.4
@@ -410,12 +407,7 @@ final class PetController: NSObject {
 
     private func scheduleAliveEvents() {
         let now = CACurrentMediaTime()
-        // 眨眼：随机 2–7 秒一次，每次约 120ms 的垂直压一下
-        if now >= aliveBlinkUntil, Double.random(in: 0..<1) < 0.03 {
-            aliveBlinkStart = now
-            aliveBlinkDuration = 0.12
-            aliveBlinkUntil = now + aliveBlinkDuration
-        }
+
         // 坐下：只在纯空闲时，随机 25–60 秒一次，每次约 2.4s 下沉一点
         let idle = model.baseState == "IDLE" && model.overlayClipName == nil && model.pulseState == nil
         if idle, now >= aliveSitUntil, Double.random(in: 0..<1) < 0.008 {
@@ -1394,18 +1386,11 @@ final class PetController: NSObject {
             // 呼吸/坐下/张望现在都有真素材（idle_breathe / sit / look），不再用假变换，
             // 否则整只 sprite 被逐帧重采样，边缘会闪。
             if !reducedMotion {
-                let now = CACurrentMediaTime()
-
                 // 望向鼠标：用水平位移代替旋转，纯 blit 不重采样，边缘保持锐利
                 let petCenterX = petX + petWidth / 2
                 let dx = NSEvent.mouseLocation.x - petCenterX
                 shiftX = max(-4, min(4, dx / 260))
 
-                // 眨眼：整只竖直压一下，读作「眨一下」
-                if now < aliveBlinkUntil {
-                    let progress = min(1, max(0, (now - aliveBlinkStart) / aliveBlinkDuration))
-                    scaleY *= 1 - 0.32 * sin(.pi * progress)
-                }
             }
 
             // 互动手势叠加在上面（覆盖旋转，乘进缩放）
