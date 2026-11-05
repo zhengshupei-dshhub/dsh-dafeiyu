@@ -69,7 +69,9 @@ final class PetController: NSObject {
     private let imageCache = NSCache<NSString, NSImage>()
     /// Decoded frames are held only in this bounded cache: a 24 fps set is
     /// thousands of frames and each decoded one costs about 0.55 MB.
-    private static let decodedFrameCache = 24
+    // 24 fps 的片段有 200+ 帧；缓存太小会导致每帧重新解码、画面卡顿。
+    // 64 帧 ≈ 2.6 秒 ≈ 35MB，能覆盖一个循环窗口。
+    private static let decodedFrameCache = 64
     private var maxFrameWidth: CGFloat = 238
     private var maxFrameHeight: CGFloat = 260
 
@@ -1378,34 +1380,31 @@ final class PetController: NSObject {
                 return
             }
             ctx.saveGState()
+            // 像素画：关掉插值，避免缩放/位移时边缘像素逐帧呼吸式抖动（「一闪一闪」）。
+            ctx.interpolationQuality = .none
+            NSGraphicsContext.current?.imageInterpolation = .none
+
             var scaleX: CGFloat = 1
             var scaleY: CGFloat = 1
             var rotation: CGFloat = 0
             var lift: CGFloat = 0
+            var shiftX: CGFloat = 0
 
-            // 常驻「活着」的微动：呼吸 + 望向鼠标 + 眨眼 + 偶尔坐下
+            // 只保留「没有对应动画帧」的两个微动：眨眼 + 望向鼠标。
+            // 呼吸/坐下/张望现在都有真素材（idle_breathe / sit / look），不再用假变换，
+            // 否则整只 sprite 被逐帧重采样，边缘会闪。
             if !reducedMotion {
                 let now = CACurrentMediaTime()
-                let breathe = 0.015 * sin(2 * .pi * now / 3.0)
-                scaleX += breathe
-                scaleY += breathe
 
-                // 望向鼠标：朝光标方向轻微侧身（限制在小角度，避免转晕）
+                // 望向鼠标：用水平位移代替旋转，纯 blit 不重采样，边缘保持锐利
                 let petCenterX = petX + petWidth / 2
-                rotation = max(-0.06, min(0.06, (NSEvent.mouseLocation.x - petCenterX) / 900))
+                let dx = NSEvent.mouseLocation.x - petCenterX
+                shiftX = max(-4, min(4, dx / 260))
 
                 // 眨眼：整只竖直压一下，读作「眨一下」
                 if now < aliveBlinkUntil {
                     let progress = min(1, max(0, (now - aliveBlinkStart) / aliveBlinkDuration))
                     scaleY *= 1 - 0.32 * sin(.pi * progress)
-                }
-                // 偶尔坐下：下沉一点 + 微微缩小
-                if now < aliveSitUntil {
-                    let progress = min(1, max(0, (now - aliveSitStart) / aliveSitDuration))
-                    let sitScale = 1 - 0.06 * sin(.pi * progress)
-                    scaleX *= sitScale
-                    scaleY *= sitScale
-                    lift += 7 * sin(.pi * progress)
                 }
             }
 
@@ -1432,7 +1431,7 @@ final class PetController: NSObject {
                 }
             }
 
-            ctx.translateBy(x: centerX, y: centerY + lift)
+            ctx.translateBy(x: centerX + shiftX, y: centerY + lift)
             if rotation != 0 { ctx.rotate(by: rotation) }
             if scaleX != 1 || scaleY != 1 { ctx.scaleBy(x: scaleX, y: scaleY) }
             // The content view is flipped (top-left origin). NSImage drawing

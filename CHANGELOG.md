@@ -2,6 +2,15 @@
 
 > This is release history. For installation, use the [latest stable release](https://github.com/QCYTSN/dsh-dafeiyu/releases/latest), not commands from older entries.
 
+## 0.1.36-local.1 · 2026-11-05
+
+### Fixed（画面闪烁 / 边缘光圈）
+
+- 抠图换 v2 管线：软 alpha(亮度 5→46) + 去预乘 + 边缘颜色去污染。边缘亮度从 11.8（几乎全黑）修到 108.9（本体 123.7，旧素材是 92.7），暗环消失。
+- 渲染关掉插值（`interpolationQuality = .none`）：像素画不再在缩放/位移时逐帧重采样抖动。
+- 去掉逐帧的假呼吸缩放和旋转望鼠标——两者都是整只 sprite 每帧重采样，是「一闪一闪」的主因；望鼠标改成纯水平位移（不重采样），呼吸改由真素材承担。
+- 解码帧缓存 24 → 64：241 帧的片段每帧都 miss 会卡顿。
+
 ## 0.1.35-local.1 · 2026-11-05
 
 ### Feature
