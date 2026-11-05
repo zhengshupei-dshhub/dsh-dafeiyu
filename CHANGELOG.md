@@ -2,6 +2,14 @@
 
 > This is release history. For installation, use the [latest stable release](https://github.com/QCYTSN/dsh-dafeiyu/releases/latest), not commands from older entries.
 
+## 0.1.33-local.1 · 2026-11-05
+
+### Feature
+
+- 空闲闲逛：大肥鱼在纯空闲时会在桌面底部左右缓缓「游来游去」，到屏幕边缘自动回头，
+  途中随机停几秒再继续。拖拽、菜单、互动动画、微动画、减少动态期间自动停下，不与用户操作抢位置。
+  右键菜单新增「闲逛」开关，默认开，状态持久化到 layout.json。
+
 ## 0.1.32-local.1 · 2026-11-04
 
 ### Performance

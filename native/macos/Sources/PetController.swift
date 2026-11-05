@@ -79,6 +79,7 @@ final class PetController: NSObject {
     var scale: Double
     var bubbleScale: Double
     var reducedMotion: Bool
+    var wander: Bool
     var activityLevel: String
     var soundEnabled: Bool
     var soundStates: Set<String>
@@ -112,6 +113,9 @@ final class PetController: NSObject {
     private var keepFrontTimer: Timer?
     private var microTimer: Timer?
     private var clickThroughTimer: Timer?
+    private var wanderTimer: Timer?
+    private var wanderPausedUntil: TimeInterval = 0
+    private var wanderDirection: CGFloat = 1
     /// A native menu runs its own tracking loop; keep the panel interactive
     /// until it closes so the timer cannot steal the selection click.
     private var menuOpen = false
@@ -155,6 +159,11 @@ final class PetController: NSObject {
             self.reducedMotion = raw == "1"
         } else {
             self.reducedMotion = layout.reducedMotion
+        }
+        if let raw = env["DSH_DAFEIYU_WANDER"] {
+            self.wander = raw == "1"
+        } else {
+            self.wander = layout.wander
         }
         self.activityLevel = env["DSH_DAFEIYU_ACTIVITY_LEVEL"] ?? "normal"
         self.soundEnabled = env["DSH_DAFEIYU_SOUND_ENABLED"] != "0"
@@ -316,6 +325,7 @@ final class PetController: NSObject {
         layout.scale = scale
         layout.bubbleScale = bubbleScale
         layout.reducedMotion = reducedMotion
+        layout.wander = wander
         layout.bubbleMode = bubbleMode
         layout.bubbleStates = bubbleStates
         layout.save(to: layoutURL)
@@ -397,6 +407,7 @@ final class PetController: NSObject {
         }
         updateClickThrough()
         scheduleMicro()
+        startWanderTimer()
     }
 
     /// AppKit routes a click to this panel before it ever reaches the view
@@ -699,6 +710,11 @@ final class PetController: NSObject {
         bubbleItem.submenu = bubbleMenu
         menu.addItem(bubbleItem)
 
+        let wander = NSMenuItem(title: "闲逛", action: #selector(toggleWander(_:)), keyEquivalent: "")
+        wander.target = self
+        wander.state = self.wander ? .on : .off
+        menu.addItem(wander)
+
         let reduced = NSMenuItem(title: "减少动态", action: #selector(toggleReducedMotion(_:)), keyEquivalent: "")
         reduced.target = self
         reduced.state = reducedMotion ? .on : .off
@@ -749,10 +765,12 @@ final class PetController: NSObject {
         restartAnimTimer()
         if enabled {
             microTimer?.invalidate()
+            wanderTimer?.invalidate()
             if !dragging { model.clearOverlay() }
             fadeFromFrame = nil
         } else {
             scheduleMicro()
+            startWanderTimer()
         }
     }
 
@@ -761,6 +779,60 @@ final class PetController: NSObject {
         saveLayout()
         reportSettings(["reducedMotion": reducedMotion])
         contentView?.needsDisplay = true
+    }
+
+    @objc private func toggleWander(_ sender: NSMenuItem) {
+        wander = sender.state == .off
+        startWanderTimer()
+        saveLayout()
+        reportSettings(["wander": wander])
+    }
+
+    /// 空闲时在桌面底部左右「游来游去」。只在纯空闲时走，拖拽/菜单/互动/微动画
+    /// 期间都停下，避免和用户操作抢位置。
+    private func startWanderTimer() {
+        wanderTimer?.invalidate()
+        wanderTimer = nil
+        guard wander else { return }
+        wanderTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+            self?.wanderTick()
+        }
+    }
+
+    private func canWander() -> Bool {
+        guard wander, !reducedMotion, !dragging, !menuOpen, !quitting else { return false }
+        guard model.baseState == "IDLE" else { return false }
+        guard model.overlayClipName == nil, model.pulseState == nil else { return false }
+        return true
+    }
+
+    @objc private func wanderTick() {
+        guard canWander() else { return }
+        let now = Date().timeIntervalSince1970
+        if now < wanderPausedUntil { return }
+
+        guard let panel = panel else { return }
+        let geometry = panel.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+
+        // 随机停一下，别一直走个不停
+        if Double.random(in: 0..<1) < 0.006 {
+            wanderPausedUntil = now + Double.random(in: 2.0...8.0)
+        }
+
+        let speed: CGFloat = 16.0 / 30.0
+        var nextX = petX + speed * wanderDirection
+        let margin: CGFloat = 12
+        let left = geometry.minX + margin
+        let right = geometry.maxX - petWidth - margin
+        if nextX <= left {
+            nextX = left
+            wanderDirection = 1
+        } else if nextX >= right {
+            nextX = right
+            wanderDirection = -1
+        }
+        if abs(nextX - petX) < 0.25 { return }
+        moveToPet(nextX, petY)
     }
 
     @objc private func openWebUI(_ sender: Any?) {
