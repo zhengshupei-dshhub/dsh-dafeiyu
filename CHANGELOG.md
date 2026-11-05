@@ -2,6 +2,19 @@
 
 > This is release history. For installation, use the [latest stable release](https://github.com/QCYTSN/dsh-dafeiyu/releases/latest), not commands from older entries.
 
+## 0.1.38-local.1 · 2026-11-05
+
+### Fixed（用录屏逐帧定位）
+
+- **动画追帧**：卡顿后 `tick()` 会把停顿时长一次性折算成帧号，导致从站姿瞬间「跳」到几秒后的姿势（录屏里 83.6s 的突然趴下就是这个）。现在单次最多追 100ms。
+- **工作状态片段乱换**：`workingActivityMap` 里 searching/commanding/testing 各对应不同片段，而它们的姿势完全不同（打字 / 拿纸 / 站姿）。agent 每换一个工具就触发一次切换，看起来就是闪。现在所有工作活动统一用 `working`。
+- **随机微动作停用**：`idleMicroClips` 清空——伸懒腰/打哈欠/吃东西这些片段和站姿差异太大，随机播会像瞬移；主动走动（walk）保留。
+- 状态切换淡入 0.10 → 0.20s，微动作淡入 0.22s。
+
+### Verified
+
+自录屏 25s 逐帧量化：宠物区域帧间差 max 7.79、大幅变化（>8）帧数 0；亮度跳变 max 0.126。
+
 ## 0.1.37-local.1 · 2026-11-05
 
 ### Fixed（按真机截屏逐项核对）

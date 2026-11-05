@@ -497,7 +497,9 @@ final class PetController: NSObject {
 
     private func tick() {
         let now = Self.nowMs()
-        let elapsed = max(0, now - lastTickMs)
+        // 卡顿（helper 被限流、系统调度、解码抖动）后不要把停顿时长一次性折算成帧号推进，
+        // 否则动画会从当前姿势瞬间「跳」到几秒后的姿势。最多追 100ms（约 2–3 帧）。
+        let elapsed = min(max(0, now - lastTickMs), 100)
         lastTickMs = now
         let hadPulse = model.pulseState != nil
         let previousFrame = model.frame

@@ -26,7 +26,11 @@ final class AnimationModel {
         }
         // 眨眼是一闪而过的小动作，淡入淡出压短，否则闭眼帧根本来不及显示
         if previousClip == "blink" || currentClip == "blink" { return 0.04 }
-        return 0.10
+        // 闲置微动作（坐下/张望等）姿势差异大，淡入淡出拉长到 0.22s，避免看起来像瞬移
+        let micros: Set<String> = ["sit", "look", "idle_stretch", "idle_yawn", "eat_token"]
+        if micros.contains(previousClip) || micros.contains(currentClip) { return 0.22 }
+        // 状态片段之间姿势差异也很大，默认淡入拉长到 0.20s
+        return 0.20
     }
 
     private(set) var clips: [String: Clip] = [:]

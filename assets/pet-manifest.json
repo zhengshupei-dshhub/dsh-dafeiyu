@@ -4669,19 +4669,13 @@
     "DISCONNECTED": "idle"
   },
   "workingActivityMap": {
-    "searching": "working_search",
-    "commanding": "working_command",
+    "searching": "working",
+    "commanding": "working",
     "editing": "working",
-    "testing": "working_command",
+    "testing": "working",
     "using-tool": "working"
   },
-  "idleMicroClips": [
-    "idle_stretch",
-    "idle_yawn",
-    "eat_token",
-    "sit",
-    "look"
-  ],
+  "idleMicroClips": [],
   "idleMicroIntervalsMs": {
     "quiet": [
       45000,
