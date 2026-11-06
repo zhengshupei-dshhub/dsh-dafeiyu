@@ -81,7 +81,6 @@ final class PetController: NSObject {
     var scale: Double
     var bubbleScale: Double
     var reducedMotion: Bool
-    var wander: Bool
     var activityLevel: String
     var soundEnabled: Bool
     var soundStates: Set<String>
@@ -115,12 +114,6 @@ final class PetController: NSObject {
     private var keepFrontTimer: Timer?
     private var microTimer: Timer?
     private var clickThroughTimer: Timer?
-    private var wanderTimer: Timer?
-    /// 走动时的朝向：1 向右，-1 向左（翻转精灵，避免「向前跑但向后漂」）
-    private(set) var facing: CGFloat = 1
-    private var wanderActive = false
-    private var wanderPausedUntil: TimeInterval = 0
-    private var wanderDirection: CGFloat = 1
     private var aliveTimer: Timer?
     private var aliveSitUntil: CFTimeInterval = 0
     private var aliveSitStart: CFTimeInterval = 0
@@ -168,11 +161,6 @@ final class PetController: NSObject {
             self.reducedMotion = raw == "1"
         } else {
             self.reducedMotion = layout.reducedMotion
-        }
-        if let raw = env["DSH_DAFEIYU_WANDER"] {
-            self.wander = raw == "1"
-        } else {
-            self.wander = layout.wander
         }
         self.activityLevel = env["DSH_DAFEIYU_ACTIVITY_LEVEL"] ?? "normal"
         self.soundEnabled = env["DSH_DAFEIYU_SOUND_ENABLED"] != "0"
@@ -334,7 +322,6 @@ final class PetController: NSObject {
         layout.scale = scale
         layout.bubbleScale = bubbleScale
         layout.reducedMotion = reducedMotion
-        layout.wander = wander
         layout.bubbleMode = bubbleMode
         layout.bubbleStates = bubbleStates
         layout.save(to: layoutURL)
@@ -439,7 +426,6 @@ final class PetController: NSObject {
         updateClickThrough()
         scheduleMicro()
         startAliveTimer()
-        startWanderTimer()
     }
 
     /// AppKit routes a click to this panel before it ever reaches the view
@@ -744,11 +730,6 @@ final class PetController: NSObject {
         bubbleItem.submenu = bubbleMenu
         menu.addItem(bubbleItem)
 
-        let wanderItem = NSMenuItem(title: "闲逛", action: #selector(toggleWander(_:)), keyEquivalent: "")
-        wanderItem.target = self
-        wanderItem.state = self.wander ? .on : .off
-        menu.addItem(wanderItem)
-
         let reduced = NSMenuItem(title: "减少动态", action: #selector(toggleReducedMotion(_:)), keyEquivalent: "")
         reduced.target = self
         reduced.state = reducedMotion ? .on : .off
@@ -815,86 +796,9 @@ final class PetController: NSObject {
         contentView?.needsDisplay = true
     }
 
-    @objc private func toggleWander(_ sender: NSMenuItem) {
-        wander = sender.state == .off
-        if !wander { stopWandering() }
-        startWanderTimer()
-        saveLayout()
-        reportSettings(["wander": wander])
-    }
 
-    /// 空闲时在桌面底部左右走动：播「开心小跑」跑动动画 + 移动窗口，看起来是真在走。
-    private func startWanderTimer() {
-        wanderTimer?.invalidate()
-        wanderTimer = nil
-        guard wander else { return }
-        wanderTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
-            self?.wanderTick()
-        }
-    }
 
-    private func canWander() -> Bool {
-        guard wander, !reducedMotion, !dragging, !menuOpen, !quitting else { return false }
-        guard model.baseState == "IDLE" else { return false }
-        guard model.pulseState == nil else { return false }
-        // walk 覆盖可以继续；其它覆盖（坐下/张望/互动）期间停下，让它们先播完
-        let overlay = model.overlayClipName
-        if overlay != nil && overlay != "walk" { return false }
-        return true
-    }
 
-    private func stopWandering() {
-        guard wanderActive else { return }
-        if model.overlayClipName == "walk" { model.clearOverlay() }
-        wanderActive = false
-        facing = 1
-    }
-
-    private var dbgWander: TimeInterval = 0
-    @objc private func wanderTick() {
-        let nd = Date().timeIntervalSince1970
-        if nd - dbgWander > 2 {
-            dbgWander = nd
-            let ln = "W x=\(Int(petX)) dir=\(Int(wanderDirection)) face=\(Int(facing)) ov=\(model.overlayClipName ?? "nil") base=\(model.baseState)\n"
-            if let h=FileHandle(forWritingAtPath: NSHomeDirectory()+"/.dsh/wander-debug.log"){h.seekToEndOfFile();h.write(ln.data(using:.utf8)!);h.closeFile()}else{try? ln.write(toFile: NSHomeDirectory()+"/.dsh/wander-debug.log",atomically:true,encoding:.utf8)}
-        }
-        guard canWander() else {
-            stopWandering()
-            return
-        }
-        let now = Date().timeIntervalSince1970
-        if now < wanderPausedUntil {
-            stopWandering()
-            return
-        }
-        if !wanderActive {
-            if model.playOverlay("walk") { wanderActive = true } else { return }
-        }
-        guard let panel = panel else { return }
-        let geometry = panel.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-
-        // 随机停一下，但频率降低，让走动更连贯（0.0015 * 30 ≈ 每 22 秒才停一次）
-        if Double.random(in: 0..<1) < 0.0015 {
-            wanderPausedUntil = now + Double.random(in: 1.5...4.0)
-        }
-
-        let speed: CGFloat = 26.0 / 30.0
-        var nextX = petX + speed * wanderDirection
-        let margin: CGFloat = 12
-        let left = geometry.minX + margin
-        let right = geometry.maxX - petWidth - margin
-        if nextX <= left {
-            nextX = left
-            wanderDirection = 1
-            facing = 1
-        } else if nextX >= right {
-            nextX = right
-            wanderDirection = -1
-            facing = -1
-        }
-        if abs(nextX - petX) < 0.25 { return }
-        moveToPet(nextX, petY)
-    }
 
     @objc private func openWebUI(_ sender: Any?) {
         if let url = URL(string: webuiURL), NSWorkspace.shared.open(url) {
@@ -1440,7 +1344,7 @@ final class PetController: NSObject {
             // does not compensate for a flipped context, which would render
             // the pet vertically mirrored. Mirror about the image's own
             // center so it draws right-side up while staying in place.
-            ctx.scaleBy(x: facing, y: -1)
+            ctx.scaleBy(x: 1, y: -1)
             img.draw(
                 in: NSRect(x: -drawWidth / 2, y: -drawHeight / 2, width: drawWidth, height: drawHeight),
                 from: NSRect(origin: .zero, size: img.size),

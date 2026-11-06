@@ -2,6 +2,12 @@
 
 > This is release history. For installation, use the [latest stable release](https://github.com/QCYTSN/dsh-dafeiyu/releases/latest), not commands from older entries.
 
+## 0.1.44-local.1 · 2026-11-06
+
+### Removed
+
+- **彻底移除走动（闲逛）功能**：用户反馈移动会影响使用电脑，恢复原地不动。删除 wander 计时器、朝向翻转、「闲逛」菜单项、以及布局里的 wander 字段。宠物恢复为固定位置 + 原有待机动画（呼吸/眨眼/微动作）。
+
 ## 0.1.43-local.1 · 2026-11-06
 
 ### Fixed（用户录屏反馈：移动漂移）
