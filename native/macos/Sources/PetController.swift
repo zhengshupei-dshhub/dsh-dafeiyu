@@ -116,6 +116,8 @@ final class PetController: NSObject {
     private var microTimer: Timer?
     private var clickThroughTimer: Timer?
     private var wanderTimer: Timer?
+    /// 走动时的朝向：1 向右，-1 向左（翻转精灵，避免「向前跑但向后漂」）
+    private(set) var facing: CGFloat = 1
     private var wanderActive = false
     private var wanderPausedUntil: TimeInterval = 0
     private var wanderDirection: CGFloat = 1
@@ -845,9 +847,17 @@ final class PetController: NSObject {
         guard wanderActive else { return }
         if model.overlayClipName == "walk" { model.clearOverlay() }
         wanderActive = false
+        facing = 1
     }
 
+    private var dbgWander: TimeInterval = 0
     @objc private func wanderTick() {
+        let nd = Date().timeIntervalSince1970
+        if nd - dbgWander > 2 {
+            dbgWander = nd
+            let ln = "W x=\(Int(petX)) dir=\(Int(wanderDirection)) face=\(Int(facing)) ov=\(model.overlayClipName ?? "nil") base=\(model.baseState)\n"
+            if let h=FileHandle(forWritingAtPath: NSHomeDirectory()+"/.dsh/wander-debug.log"){h.seekToEndOfFile();h.write(ln.data(using:.utf8)!);h.closeFile()}else{try? ln.write(toFile: NSHomeDirectory()+"/.dsh/wander-debug.log",atomically:true,encoding:.utf8)}
+        }
         guard canWander() else {
             stopWandering()
             return
@@ -863,12 +873,12 @@ final class PetController: NSObject {
         guard let panel = panel else { return }
         let geometry = panel.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
 
-        // 随机停一下，别一直走个不停
-        if Double.random(in: 0..<1) < 0.004 {
-            wanderPausedUntil = now + Double.random(in: 2.0...6.0)
+        // 随机停一下，但频率降低，让走动更连贯（0.0015 * 30 ≈ 每 22 秒才停一次）
+        if Double.random(in: 0..<1) < 0.0015 {
+            wanderPausedUntil = now + Double.random(in: 1.5...4.0)
         }
 
-        let speed: CGFloat = 22.0 / 30.0
+        let speed: CGFloat = 26.0 / 30.0
         var nextX = petX + speed * wanderDirection
         let margin: CGFloat = 12
         let left = geometry.minX + margin
@@ -876,9 +886,11 @@ final class PetController: NSObject {
         if nextX <= left {
             nextX = left
             wanderDirection = 1
+            facing = 1
         } else if nextX >= right {
             nextX = right
             wanderDirection = -1
+            facing = -1
         }
         if abs(nextX - petX) < 0.25 { return }
         moveToPet(nextX, petY)
@@ -1428,7 +1440,7 @@ final class PetController: NSObject {
             // does not compensate for a flipped context, which would render
             // the pet vertically mirrored. Mirror about the image's own
             // center so it draws right-side up while staying in place.
-            ctx.scaleBy(x: 1, y: -1)
+            ctx.scaleBy(x: facing, y: -1)
             img.draw(
                 in: NSRect(x: -drawWidth / 2, y: -drawHeight / 2, width: drawWidth, height: drawHeight),
                 from: NSRect(origin: .zero, size: img.size),

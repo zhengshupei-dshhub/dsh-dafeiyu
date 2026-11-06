@@ -2,6 +2,13 @@
 
 > This is release history. For installation, use the [latest stable release](https://github.com/QCYTSN/dsh-dafeiyu/releases/latest), not commands from older entries.
 
+## 0.1.43-local.1 · 2026-11-06
+
+### Fixed（用户录屏反馈：移动漂移）
+
+- **向前跑但向后漂**：走动时精灵一直朝右，向左移动也没翻转，看起来像「向前跑动但整体向后退」。加 `facing` 朝向：向左走时水平翻转精灵。
+- 走动更连贯：随机停顿频率 0.004→0.0015、时长 2-6s→1.5-4s；速度 22→26 pt/s。
+
 ## 0.1.42-local.1 · 2026-11-05
 
 ### Fixed
