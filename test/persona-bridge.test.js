@@ -11,6 +11,7 @@ import {
   growthBubbles,
   idleBubble,
   mergeBubbles,
+  milestoneBubbles,
 } from '../src/persona-bridge.js'
 
 function tmpDir() {
@@ -170,4 +171,45 @@ test('积压气泡合并成一条', () => {
   const long = mergeBubbles([{ message: '长'.repeat(200) }, { message: '乙' }])
   assert.ok(long.message.length <= 120)
   assert.match(long.message, /…$/)
+})
+
+test('里程碑：满 7 天触发一次天数里程碑', () => {
+  const r = milestoneBubbles(persona(), 7)
+  assert.equal(r.bubbles.length, 1)
+  assert.match(r.bubbles[0].message, /第七天|7 天/)
+  assert.deepEqual(r.celebratedDays, [7])
+  assert.deepEqual(r.celebratedTraits, [])
+})
+
+test('里程碑：性格首次到 70 触发一次，且带性格名', () => {
+  const p = persona({ traits: [{ id: 'dongshou', label: '动手优先', value: 70 }] })
+  const r = milestoneBubbles(p, 3)
+  assert.equal(r.bubbles.length, 1)
+  assert.match(r.bubbles[0].message, /动手优先/)
+  assert.match(r.bubbles[0].message, /70/)
+  assert.deepEqual(r.celebratedTraits, ['动手优先@70'])
+})
+
+test('里程碑：已庆祝过的不再重复触发', () => {
+  const p = persona({ traits: [{ id: 'dongshou', label: '动手优先', value: 72 }] })
+  const r = milestoneBubbles(p, 3, [7], ['动手优先@70'])
+  assert.equal(r.bubbles.length, 0)
+  assert.deepEqual(r.celebratedTraits, ['动手优先@70'])
+})
+
+test('里程碑：首次启动不补发历史里程碑', () => {
+  const dir = tmpDir()
+  // 认识 30 天 + 性格 85：按规则早该庆祝，但首次启动只记基线。
+  const p = persona({
+    identity: { name: '大肥鱼', role: 'coding agent', bornAt: Date.now() - 30 * 86_400_000 },
+    traits: [{ id: 'dongshou', label: '动手优先', value: 85 }],
+  })
+  writePersona(dir, p)
+  const sent = []
+  const bridge = createPersonaBridge({ dir, send: (m) => sent.push(m), idleMinutes: 0 })
+  bridge.start()
+  assert.equal(sent.length, 0, '基线不补发里程碑')
+  assert.deepEqual(bridge.state.celebratedTraits, ['动手优先@70', '动手优先@85'])
+  assert.deepEqual(bridge.state.celebratedDays, [7, 30])
+  bridge.stop()
 })

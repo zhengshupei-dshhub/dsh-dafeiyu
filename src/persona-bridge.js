@@ -26,6 +26,17 @@ const TRAIT_FLAVOR = [
   { min: 0, text: '还在慢慢长' },
 ]
 
+// 里程碑：长期陪伴的成就感反馈，比「换天」更郑重。text 里的 {label} 会被性格名替换。
+const DAY_MILESTONES = [
+  { day: 7, text: '认识你第七天啦，我这条鱼在你桌面上算是住下了' },
+  { day: 30, text: '满月了，这一个月一起修了不少东西，谢谢你没把我换掉' },
+  { day: 100, text: '一百天，我已经不是刚出厂那条鱼了' },
+]
+const TRAIT_MILESTONES = [
+  { value: 70, text: '「{label}」第一次长到 70，这个性格算是真的刻进我里面了' },
+  { value: 85, text: '「{label}」到 85 了，大概这辈子都改不掉了' },
+]
+
 function truncate(text, max) {
   const value = String(text ?? '').replace(/\s+/g, ' ').trim()
   return value.length > max ? `${value.slice(0, max - 1)}…` : value
@@ -83,6 +94,44 @@ export function diaryBubble(persona, entry) {
 export function dayBubble(persona, days) {
   const name = persona?.identity?.name ?? '大肥鱼'
   return { message: `我是${name}，认识你第 ${days} 天啦`, detail: '人设 · 今天也一起干活' }
+}
+
+/**
+ * 里程碑气泡：认识满 7/30/100 天、某个性格首次到 70/85 时，说一句特别的话。
+ * 返回 { bubbles, celebratedDays, celebratedTraits }：celebrated* 是「已达成的里程碑集合」，
+ * 调用方拿它更新持久状态，避免每次轮询都重复触发。首次启动只取集合、丢气泡（不补发历史）。
+ */
+export function milestoneBubbles(persona, days, celebratedDays = [], celebratedTraits = []) {
+  const bubbles = []
+  const nextDays = new Set(celebratedDays)
+  const nextTraits = new Set(celebratedTraits)
+
+  for (const m of DAY_MILESTONES) {
+    if (days >= m.day && !nextDays.has(m.day)) {
+      bubbles.push({ message: m.text, detail: `人设里程碑 · 认识第 ${m.day} 天` })
+      nextDays.add(m.day)
+    }
+  }
+
+  const traits = Array.isArray(persona?.traits) ? persona.traits : []
+  for (const t of traits) {
+    const value = Number(t?.value ?? 0)
+    const label = String(t?.label ?? t?.id ?? '')
+    if (!label) continue
+    for (const m of TRAIT_MILESTONES) {
+      const key = `${label}@${m.value}`
+      if (value >= m.value && !nextTraits.has(key)) {
+        bubbles.push({ message: m.text.replaceAll('{label}', label), detail: `人设里程碑 · 性格 ${label}` })
+        nextTraits.add(key)
+      }
+    }
+  }
+
+  return {
+    bubbles,
+    celebratedDays: [...nextDays],
+    celebratedTraits: [...nextTraits],
+  }
 }
 
 /**
@@ -171,6 +220,8 @@ export function createPersonaBridge(options = {}) {
     day: '',
     lastBubbleAt: 0,
     lastIdleChatAt: 0,
+    celebratedDays: [],
+    celebratedTraits: [],
   }
   let queue = []
   let timer
@@ -226,12 +277,16 @@ export function createPersonaBridge(options = {}) {
     const evolution = Array.isArray(persona.evolution) ? persona.evolution : []
     const diaryCount = Array.isArray(persona.diary) ? persona.diary.length : 0
     const day = dayKey(now())
+    const days = daysKnown(persona, now())
 
-    // 首次启动只记录基线，不把历史成长全倒出来。
+    // 首次启动只记录基线，不把历史成长全倒出来；已达成的里程碑也只标记、不补发。
     if (state.evolutionCount < 0) {
       state.evolutionCount = evolution.length
       state.diaryCount = diaryCount
       state.day = day
+      const base = milestoneBubbles(persona, days)
+      state.celebratedDays = base.celebratedDays
+      state.celebratedTraits = base.celebratedTraits
       persist()
       return
     }
@@ -248,9 +303,13 @@ export function createPersonaBridge(options = {}) {
     if (state.day && day !== state.day) {
       enqueue([dayBubble(persona, daysKnown(persona, now()))])
     }
+    const milestones = milestoneBubbles(persona, days, state.celebratedDays ?? [], state.celebratedTraits ?? [])
+    if (milestones.bubbles.length) enqueue(milestones.bubbles)
     state.evolutionCount = evolution.length
     state.diaryCount = diaryCount
     state.day = day
+    state.celebratedDays = milestones.celebratedDays
+    state.celebratedTraits = milestones.celebratedTraits
     persist()
   }
 
