@@ -742,19 +742,32 @@ export class HelperProcess {
     const heartbeatMs = this.options.heartbeatMs ?? 5000
     if (heartbeatMs <= 0) return
     const timeoutMs = this.options.heartbeatTimeoutMs ?? Math.max(heartbeatMs * 3, 12000)
+    // 连续多少次丢 pong 才杀进程：单次 sample 显示所有线程都 idle，说明不是
+    // helper 卡死，而是 pong 被 stdout 背压 / 主线程事件循环偶发延迟吞掉了。
+    // 给 3 次重试窗口，避免 15s 内一次 pong 没回就把活进程杀掉。
+    const missThreshold = this.options.heartbeatMissThreshold ?? 3
+    this.missCount = 0
     this.heartbeatTimer = setInterval(() => {
       const child = this.child
       if (!child || !this.spawned) return
-      if (Date.now() - this.lastPongAt > timeoutMs) {
+      const silenceMs = Date.now() - this.lastPongAt
+      if (silenceMs > timeoutMs) {
+        this.missCount += 1
+        if (this.missCount < missThreshold) {
+          // 还在容忍窗口内：记一条 WARN 但不杀进程，下一个周期再确认一次。
+          this.#log('WARN', `heartbeat miss ${this.missCount}/${missThreshold}: no pong for ${String(silenceMs)}ms; retrying before kill`)
+          return
+        }
         this.logger.warn?.('dsh-dafeiyu helper heartbeat timed out')
         const sample = this.#captureHeartbeatSample(child)
         this.#log(
           'ERROR',
-          `heartbeat timed out after ${String(Date.now() - this.lastPongAt)}ms; killing helper; sample=${sample ?? 'unavailable'}`,
+          `heartbeat timed out after ${String(silenceMs)}ms (miss ${this.missCount}/${missThreshold}); killing helper; sample=${sample ?? 'unavailable'}`,
         )
         child.kill()
         return
       }
+      this.missCount = 0
       this.send(createMessage(CompanionMessageKind.PING))
     }, heartbeatMs)
     this.heartbeatTimer.unref?.()
