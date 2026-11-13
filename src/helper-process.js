@@ -755,7 +755,10 @@ export class HelperProcess {
         this.missCount += 1
         if (this.missCount < missThreshold) {
           // 还在容忍窗口内：记一条 WARN 但不杀进程，下一个周期再确认一次。
-          this.#log('WARN', `heartbeat miss ${this.missCount}/${missThreshold}: no pong for ${String(silenceMs)}ms; retrying before kill`)
+          this.#log('WARN', `heartbeat miss ${this.missCount}/${missThreshold}: no pong for ${String(silenceMs)}ms; still pinging, retrying before kill`)
+          // 关键：重试期间必须继续发 PING。否则 helper 的 stdin readLine 永远阻塞
+          // （没有新输入就不可能回 pong），重试变成干等，最后仍被杀。
+          this.send(createMessage(CompanionMessageKind.PING))
           return
         }
         this.logger.warn?.('dsh-dafeiyu helper heartbeat timed out')
